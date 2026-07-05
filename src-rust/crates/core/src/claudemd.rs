@@ -433,13 +433,13 @@ mod tests {
         let files =
             load_all_memory_files_with_options(project.path(), &MemoryLoadOptions::hosted_review());
 
-        match original_home {
-            Some(value) => std::env::set_var("HOME", value),
-            None => std::env::remove_var("HOME"),
-        }
         match original_test_home {
             Some(value) => std::env::set_var("COVEN_CODE_TEST_HOME", value),
             None => std::env::remove_var("COVEN_CODE_TEST_HOME"),
+        }
+        match original_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
         }
         match original_userprofile {
             Some(value) => std::env::set_var("USERPROFILE", value),
@@ -449,6 +449,51 @@ mod tests {
         assert!(files.iter().all(|file| file.scope != MemoryScope::User));
         assert!(files.iter().any(|file| {
             file.scope == MemoryScope::Project && file.content.contains("project memory")
+        }));
+    }
+
+    #[test]
+    fn hosted_review_loads_managed_rules_only_when_allowed() {
+        let project = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let rules = home.path().join(".coven-code").join("rules");
+        std::fs::create_dir_all(&rules).unwrap();
+        std::fs::write(rules.join("managed.md"), "managed hosted policy").unwrap();
+
+        let _lock = crate::coven_shared::COVEN_HOME_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let original_test_home = std::env::var("COVEN_CODE_TEST_HOME").ok();
+        let original_home = std::env::var("HOME").ok();
+        let original_userprofile = std::env::var("USERPROFILE").ok();
+        std::env::set_var("COVEN_CODE_TEST_HOME", home.path());
+        std::env::set_var("HOME", home.path());
+        std::env::set_var("USERPROFILE", home.path());
+
+        let default_hosted =
+            load_all_memory_files_with_options(project.path(), &MemoryLoadOptions::hosted_review());
+        let mut trusted_policy = MemoryLoadOptions::hosted_review();
+        trusted_policy.allow_managed_rules = true;
+        let trusted_hosted = load_all_memory_files_with_options(project.path(), &trusted_policy);
+
+        match original_test_home {
+            Some(value) => std::env::set_var("COVEN_CODE_TEST_HOME", value),
+            None => std::env::remove_var("COVEN_CODE_TEST_HOME"),
+        }
+        match original_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_userprofile {
+            Some(value) => std::env::set_var("USERPROFILE", value),
+            None => std::env::remove_var("USERPROFILE"),
+        }
+
+        assert!(default_hosted
+            .iter()
+            .all(|file| file.scope != MemoryScope::Managed));
+        assert!(trusted_hosted.iter().any(|file| {
+            file.scope == MemoryScope::Managed && file.content.contains("managed hosted policy")
         }));
     }
 
@@ -474,13 +519,13 @@ mod tests {
 
         let files = load_all_memory_files_with_options(project.path(), &MemoryLoadOptions::local());
 
-        match original_home {
-            Some(value) => std::env::set_var("HOME", value),
-            None => std::env::remove_var("HOME"),
-        }
         match original_test_home {
             Some(value) => std::env::set_var("COVEN_CODE_TEST_HOME", value),
             None => std::env::remove_var("COVEN_CODE_TEST_HOME"),
+        }
+        match original_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
         }
         match original_userprofile {
             Some(value) => std::env::set_var("USERPROFILE", value),
